@@ -1,0 +1,185 @@
+<!-- your_template.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Delinquent Users Distribution by Initial Rating</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.0.2/echarts.simple.min.js"></script>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        #ratingDistributionChart {
+            width: 80%;
+            height: 70vh;
+            margin: auto;
+        }
+        .loading-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="ratingDistributionChart">
+        <div class="loading-container">加载中...</div>
+    </div>
+
+    <script type="text/javascript">
+        // 使用 Worker 处理数据
+        function processDataInWorker(jsonData) {
+            return new Promise((resolve) => {
+                const blob = new Blob([`
+                    self.onmessage = function(e) {
+                        const jsonData = e.data;
+                        const ratingMap = new Map();
+                        
+                        // 批量处理数据
+                        const batchSize = 1000;
+                        for (let i = 0; i < jsonData.length; i += batchSize) {
+                            const batch = jsonData.slice(i, i + batchSize);
+                            batch.forEach(user => {
+                                if (user['标当前状态'] === '逾期中') {
+                                    const rating = user['初始评级'];
+                                    if (rating) {  // 确保评级存在
+                                        ratingMap.set(rating, (ratingMap.get(rating) || 0) + 1);
+                                    }
+                                }
+                            });
+                        }
+
+                        // 转换数据格式
+                        const result = {
+                            ratings: Array.from(ratingMap.keys()),
+                            counts: Array.from(ratingMap.values())
+                        };
+
+                        self.postMessage(result);
+                    };
+                `], { type: 'application/javascript' });
+
+                const worker = new Worker(URL.createObjectURL(blob));
+                worker.onmessage = function(e) {
+                    resolve(e.data);
+                    worker.terminate();
+                };
+                worker.postMessage(jsonData);
+            });
+        }
+
+        async function initChart() {
+            const chartContainer = document.getElementById('ratingDistributionChart');
+            const myChart = echarts.init(chartContainer);
+            
+            // 显示加载动画
+            myChart.showLoading({
+                text: '数据处理中...',
+                maskColor: 'rgba(255, 255, 255, 0.8)'
+            });
+
+            try {
+                const jsonData = JSON.parse('{{ loan_data_json|safe }}');
+                const processedData = await processDataInWorker(jsonData);
+
+                const option = {
+                    title: {
+                        text: '违约用户按照初始评级分布图',
+                        left: 'center'
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: {
+                            type: 'shadow'
+                        },
+                        formatter: '{b}: {c}人'
+                    },
+                    grid: {
+                        left: '3%',
+                        right: '4%',
+                        bottom: '3%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: processedData.ratings,
+                        axisLabel: {
+                            interval: 0,
+                            rotate: 30
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: '人数'
+                    },
+                    series: [{
+                        name: '违约用户数',
+                        data: processedData.counts,
+                        type: 'bar',
+                        itemStyle: {
+                            color: '#ff4757'
+                        },
+                        large: true,
+                        largeThreshold: 500,
+                        barMaxWidth: 50
+                    }],
+                    animation: false,
+                    progressive: 500,
+                    progressiveThreshold: 3000
+                };
+
+                myChart.setOption(option);
+                myChart.hideLoading();
+
+                // 优化 resize 处理
+                let resizeTimeout;
+                const handleResize = () => {
+                    if (resizeTimeout) clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(() => {
+                        if (myChart && !myChart.isDisposed()) {
+                            myChart.resize();
+                        }
+                    }, 100);
+                };
+
+                window.addEventListener('resize', handleResize);
+
+                // 清理函数
+                return () => {
+                    window.removeEventListener('resize', handleResize);
+                    if (myChart && !myChart.isDisposed()) {
+                        myChart.dispose();
+                    }
+                };
+
+            } catch (error) {
+                console.error('Error processing data:', error);
+                myChart.hideLoading();
+                chartContainer.innerHTML = '数据加载失败，请刷新重试';
+            }
+        }
+
+        // 使用 Intersection Observer 实现懒加载
+        document.addEventListener('DOMContentLoaded', function() {
+            const chartContainer = document.getElementById('ratingDistributionChart');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        initChart();
+                        observer.disconnect();
+                    }
+                });
+            }, {
+                threshold: 0.1
+            });
+            
+            observer.observe(chartContainer);
+        });
+    </script>
+</body>
+</html>

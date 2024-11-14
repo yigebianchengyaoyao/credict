@@ -1,0 +1,45 @@
+<!-- your_template.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ECharts with JSON Data from File</title>
+    <!-- 引入 ECharts 文件 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.0.2/echarts.min.js"></script>
+    <style>
+        /* 添加一些基本的页面样式 */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        #loanChart {
+            width: 80%;  /* 设置图表宽度为视口宽度的80% */
+            height: 70vh; /* 设置图表高度为视口高度的70% */
+            margin: auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- 准备一个容器来显示图表 -->
+    <div id="loanChart"></div>
+
+    <script type="text/javascript">
+        // 使用从Django模板传递过来的JSON数据
+        var jsonData = JSON.parse('{{ loan_data_json|safe }}');
+
+        // ... 处理数据的代码 ...
+
+        // 使用ECharts创建图表
+        var myChart = echarts.init(document.getElementById('loanChart'));
+
+        var option = {
+            // ... 图表配置项 ...
+        };
+
+        // 使用配置项和数据显示图表
+        myChart.setOption(option);
+    </script>
+</body>
+</html>

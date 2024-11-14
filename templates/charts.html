@@ -1,0 +1,139 @@
+<!-- your_template.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ECharts with JSON Data from File</title>
+    <!-- 引入 ECharts 文件 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.0.2/echarts.simple.min.js"></script>
+    <style>
+        body{
+            display:flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        #loanChart{
+            width: 80%;
+            height: 70vh;
+            margin: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="loanChart">
+        <div class="loading-container">加载中...</div>
+    </div>
+
+    <script type="text/javascript">
+        // 使用 Worker 进行数据处理
+        function processDataInWorker(jsonData) {
+            return new Promise((resolve) => {
+                const blob = new Blob([`
+                    self.onmessage = function(e) {
+                        const jsonData = e.data;
+                        const dailyLoanSums = {};
+                        
+                        // 批量处理数据
+                        const batchSize = 1000;
+                        for (let i = 0; i < jsonData.length; i += batchSize) {
+                            const batch = jsonData.slice(i, i + batchSize);
+                            batch.forEach(item => {
+                                const date = item['借款成功日期'];
+                                const amount = parseFloat(item['借款金额']);
+                                dailyLoanSums[date] = (dailyLoanSums[date] || 0) + amount;
+                            });
+                        }
+
+                        const dailyLoanArray = Object.keys(dailyLoanSums)
+                            .sort()
+                            .map(date => ({ date, amount: dailyLoanSums[date] }));
+
+                        self.postMessage(dailyLoanArray);
+                    };
+                `], { type: 'application/javascript' });
+
+                const worker = new Worker(URL.createObjectURL(blob));
+                worker.onmessage = function(e) {
+                    resolve(e.data);
+                    worker.terminate();
+                };
+                worker.postMessage(jsonData);
+            });
+        }
+
+        // 主要图表初始化函数
+        async function initChart() {
+            const chartContainer = document.getElementById('loanChart');
+            const myChart = echarts.init(chartContainer);
+            const jsonData = JSON.parse('{{ loan_data_json|safe }}');
+
+            // 显示加载动画
+            myChart.showLoading();
+
+            try {
+                // 在 Worker 中处理数据
+                const dailyLoanArray = await processDataInWorker(jsonData);
+
+                // 使用节流优化渲染
+                const option = {
+                    title: {
+                        text: '每日借款金额'
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: {
+                            type: 'cross'
+                        }
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: dailyLoanArray.map(function(item) { return item.date; })
+                    },
+                    yAxis: {
+                        type: 'value'
+                    },
+                    series: [{
+                        name: '借款金额',
+                        type: 'bar',
+                        data: dailyLoanArray.map(function(item) { return item.amount; }),
+                        smooth: true
+                    }],
+                    animation: false, // 禁用动画提高性能
+                    progressive: 500, // 渐进式渲染
+                    progressiveThreshold: 3000
+                };
+
+                myChart.setOption(option);
+                myChart.hideLoading();
+
+                // 优化 resize 处理
+                let resizeTimeout;
+                window.addEventListener('resize', function() {
+                    if (resizeTimeout) clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(() => myChart.resize(), 100);
+                });
+
+            } catch (error) {
+                console.error('Error processing data:', error);
+                myChart.hideLoading();
+            }
+        }
+
+        // 使用 Intersection Observer 实现懒加载
+        document.addEventListener('DOMContentLoaded', function() {
+            const chartContainer = document.getElementById('loanChart');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        initChart();
+                        observer.disconnect();
+                    }
+                });
+            });
+            
+            observer.observe(chartContainer);
+        });
+    </script>
+</body>
+</html>

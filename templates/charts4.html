@@ -1,0 +1,200 @@
+<!-- your_template.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Borrower Count by Time Period</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.0.2/echarts.simple.min.js"></script>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        #timePeriodChart {
+            width: 80%;
+            height: 70vh;
+            margin: auto;
+        }
+        .loading-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="timePeriodChart">
+        <div class="loading-container">加载中...</div>
+    </div>
+
+    <script type="text/javascript">
+        // 使用 Worker 处理数据
+        function processDataInWorker(jsonData) {
+            return new Promise((resolve) => {
+                const blob = new Blob([`
+                    self.onmessage = function(e) {
+                        const jsonData = e.data;
+                        const timePeriodCount = new Map();
+                        
+                        // 批量处理数据
+                        const batchSize = 1000;
+                        for (let i = 0; i < jsonData.length; i += batchSize) {
+                            const batch = jsonData.slice(i, i + batchSize);
+                            batch.forEach(item => {
+                                const date = new Date(item['借款成功日期']);
+                                const period = \`\${date.getFullYear()}-\${String(date.getMonth() + 1).padStart(2, '0')}\`;
+                                timePeriodCount.set(period, (timePeriodCount.get(period) || 0) + 1);
+                            });
+                        }
+
+                        // 转换为数组并排序
+                        const sortedPeriods = Array.from(timePeriodCount.keys()).sort();
+                        const result = {
+                            periods: sortedPeriods,
+                            counts: sortedPeriods.map(period => timePeriodCount.get(period))
+                        };
+
+                        self.postMessage(result);
+                    };
+                `], { type: 'application/javascript' });
+
+                const worker = new Worker(URL.createObjectURL(blob));
+                worker.onmessage = function(e) {
+                    resolve(e.data);
+                    worker.terminate();
+                };
+                worker.postMessage(jsonData);
+            });
+        }
+
+        async function initChart() {
+            const chartContainer = document.getElementById('timePeriodChart');
+            const myChart = echarts.init(chartContainer);
+            
+            // 显示加载动画
+            myChart.showLoading({
+                text: '数据处理中...',
+                maskColor: 'rgba(255, 255, 255, 0.8)'
+            });
+
+            try {
+                const jsonData = JSON.parse('{{ loan_data_json|safe }}');
+                const data = await processDataInWorker(jsonData);
+
+                const option = {
+                    title: {
+                        text: '不同时段的借款人数',
+                        left: 'center',
+                        top: 20
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: {
+                            type: 'shadow'
+                        },
+                        formatter: function(params) {
+                            return `${params[0].name}<br/>借款人数: ${params[0].value}`;
+                        }
+                    },
+                    grid: {
+                        left: '3%',
+                        right: '4%',
+                        bottom: '3%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: data.periods,
+                        axisLabel: {
+                            interval: 'auto',
+                            rotate: 45
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: '借款人数'
+                    },
+                    series: [{
+                        name: '借款人数',
+                        type: 'bar',
+                        data: data.counts,
+                        itemStyle: {
+                            color: '#3498db'
+                        },
+                        large: true,
+                        largeThreshold: 500,
+                        barMaxWidth: 50,
+                        emphasis: {
+                            itemStyle: {
+                                color: '#2980b9'
+                            }
+                        }
+                    }],
+                    dataZoom: [{
+                        type: 'inside',
+                        start: 0,
+                        end: 100
+                    }, {
+                        show: true,
+                        type: 'slider',
+                        top: '90%'
+                    }],
+                    animation: false,
+                    progressive: 500,
+                    progressiveThreshold: 3000
+                };
+
+                myChart.setOption(option);
+                myChart.hideLoading();
+
+                // 优化 resize 处理
+                let resizeTimeout;
+                const handleResize = () => {
+                    if (resizeTimeout) clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(() => {
+                        if (myChart && !myChart.isDisposed()) {
+                            myChart.resize();
+                        }
+                    }, 100);
+                };
+
+                window.addEventListener('resize', handleResize);
+
+                // 清理函数
+                return () => {
+                    window.removeEventListener('resize', handleResize);
+                    if (myChart && !myChart.isDisposed()) {
+                        myChart.dispose();
+                    }
+                };
+
+            } catch (error) {
+                console.error('Error processing data:', error);
+                myChart.hideLoading();
+                chartContainer.innerHTML = '数据加载失败，请刷新重试';
+            }
+        }
+
+        // 使用 Intersection Observer 实现懒加载
+        document.addEventListener('DOMContentLoaded', function() {
+            const chartContainer = document.getElementById('timePeriodChart');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        initChart();
+                        observer.disconnect();
+                    }
+                });
+            }, {
+                threshold: 0.1
+            });
+            
+            observer.observe(chartContainer);
+        });
+    </script>
+</body>
+</html>

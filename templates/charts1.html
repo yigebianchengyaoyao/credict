@@ -1,0 +1,155 @@
+<!-- your_template.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Age Distribution of Delinquent Users</title>
+    <!-- 使用更轻量级的 ECharts 版本 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.0.2/echarts.simple.min.js"></script>
+    <style>
+        /* 添加一些基本的页面样式 */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        #loanChart {
+            width: 80%;  /* 设置图表宽度为视口宽度的80% */
+            height: 70vh; /* 设置图表高度为视口高度的70% */
+            margin: auto;
+        }
+        .loading-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="loanChart">
+        <div class="loading-container">加载中...</div>
+    </div>
+
+    <script type="text/javascript">
+        // 使用 Worker 处理数据
+        function processDataInWorker(jsonData) {
+            return new Promise((resolve) => {
+                const blob = new Blob([`
+                    self.onmessage = function(e) {
+                        const jsonData = e.data;
+                        const ageMap = new Map();
+                        
+                        // 批量处理数据
+                        const batchSize = 1000;
+                        for (let i = 0; i < jsonData.length; i += batchSize) {
+                            const batch = jsonData.slice(i, i + batchSize);
+                            batch.forEach(user => {
+                                if (user['标当前状态'] === '逾期中') {
+                                    const age = parseInt(user['年龄'], 10);
+                                    if (!isNaN(age)) {
+                                        ageMap.set(age, (ageMap.get(age) || 0) + 1);
+                                    }
+                                }
+                            });
+                        }
+
+                        const result = {
+                            ages: Array.from(ageMap.keys()).sort((a, b) => a - b),
+                            counts: []
+                        };
+                        result.counts = result.ages.map(age => ageMap.get(age));
+
+                        self.postMessage(result);
+                    };
+                `], { type: 'application/javascript' });
+
+                const worker = new Worker(URL.createObjectURL(blob));
+                worker.onmessage = function(e) {
+                    resolve(e.data);
+                    worker.terminate();
+                };
+                worker.postMessage(jsonData);
+            });
+        }
+
+        async function initChart() {
+            const chartContainer = document.getElementById('loanChart');
+            const myChart = echarts.init(chartContainer);
+            
+            // 显示加载动画
+            myChart.showLoading();
+
+            try {
+                const jsonData = JSON.parse('{{ loan_data_json|safe }}');
+                const processedData = await processDataInWorker(jsonData);
+
+                const option = {
+                    title: {
+                        text: '违约用户按照年龄分布图'
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: {
+                            type: 'shadow'
+                        }
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: processedData.ages,
+                        axisLabel: {
+                            interval: 'auto' // 自动隐藏过密的标签
+                        }
+                    },
+                    yAxis: {
+                        type: 'value'
+                    },
+                    series: [{
+                        data: processedData.counts,
+                        type: 'bar',
+                        itemStyle: {
+                            color: '#ff4757'
+                        },
+                        large: true, // 开启大数据模式
+                        largeThreshold: 500 // 设置大数据阈值
+                    }],
+                    animation: false, // 禁用动画提高性能
+                    progressive: 500, // 渐进式渲染
+                    progressiveThreshold: 3000
+                };
+
+                myChart.setOption(option);
+                myChart.hideLoading();
+
+                // 优化 resize 处理
+                let resizeTimeout;
+                window.addEventListener('resize', function() {
+                    if (resizeTimeout) clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(() => myChart.resize(), 100);
+                });
+
+            } catch (error) {
+                console.error('Error processing data:', error);
+                myChart.hideLoading();
+            }
+        }
+
+        // 使用 Intersection Observer 实现懒加载
+        document.addEventListener('DOMContentLoaded', function() {
+            const chartContainer = document.getElementById('loanChart');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        initChart();
+                        observer.disconnect();
+                    }
+                });
+            });
+            
+            observer.observe(chartContainer);
+        });
+    </script>
+</body>
+</html>

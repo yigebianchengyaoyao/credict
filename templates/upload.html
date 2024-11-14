@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <title>Upload CSV File</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        body {
+            background-color: #f4f7fa; /* 设置背景色 */
+            font-family: Arial, sans-serif; /* 使用清爽的字体 */
+        }
+
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px; /* 添加一些间距 */
+            background-color: #007BFF; /* 按钮背景色 */
+            color: white; /* 按钮字体颜色 */
+            text-align: center; /* 文本居中 */
+            text-decoration: none; /* 移除下划线 */
+            border-radius: 5px; /* 圆角 */
+            transition: background-color 0.3s; /* 添加过渡效果 */
+            border: none; /* 移除默认边框 */
+            box-shadow: 0 2px 5px rgba(0, 123, 255, 0.3); /* 添加阴影效果 */
+        }
+
+        .button:hover {
+            background-color: #0056b3; /* 悬停时的背景色 */
+        }
+
+        h1, h2 {
+            color: #333; /* 更好的字体颜色 */
+        }
+
+        table {
+            width: 100%; /* 表格宽度 */
+            margin-top: 20px; /* 上间距 */
+            border-collapse: collapse; /* 合并边框 */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* 添加阴影效果 */
+        }
+
+        th, td {
+            padding: 15px; /* 内部填充 */
+            text-align: left; /* 文字左对齐 */
+            border-bottom: 1px solid #ddd; /* 下边框 */
+        }
+
+        th {
+            background-color: #007BFF; /* 表头背景色 */
+            color: white; /* 表头字体颜色 */
+        }
+
+        tr:hover {
+            background-color: #f1f1f1; /* 悬停行背景色 */
+        }
+
+        .wrapper {
+            display: flex;
+            width: 100%;
+        }
+
+        #sidebar {
+            min-width: 250px;
+            max-width: 250px;
+            min-height: 100vh;
+            background: #343a40;
+            color: #fff;
+            transition: all 0.3s;
+        }
+
+        #sidebar.active {
+            margin-left: -250px;
+        }
+
+        #sidebar .sidebar-header {
+            padding: 20px;
+            background: #2c3136;
+        }
+
+        #sidebar ul.components {
+            padding: 20px 0;
+        }
+
+        #sidebar ul li a {
+            padding: 10px 20px;
+            font-size: 1.1em;
+            display: block;
+            color: #fff;
+            text-decoration: none;
+        }
+
+        #sidebar ul li a:hover {
+            background: #007bff;
+        }
+
+        /* 添加激活状态的样式 */
+        #sidebar ul li a.active {
+            background: #007bff;
+        }
+
+        #content {
+            width: 100%;
+            padding: 20px;
+            min-height: 100vh;
+            transition: all 0.3s;
+        }
+
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <nav id="sidebar">
+            <div class="sidebar-header">
+                <h3>用户信用可视化</h3>
+            </div>
+
+            <ul class="list-unstyled components">
+                <li class="active">
+                    <a href="#" id="prediction-link">
+                        <i class="fas fa-robot mr-2"></i>信用评级预测
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="chart-link" data-url="{% url 'chart_view' %}">
+                        <i class="fas fa-chart-line mr-2"></i>每日借款金额
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="chart-link" data-url="{% url 'chart_view1' %}">
+                        <i class="fas fa-users mr-2"></i>违约用户年龄分布
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="chart-link" data-url="{% url 'chart_view2' %}">
+                        <i class="fas fa-star mr-2"></i>违约用户评级分布
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="chart-link" data-url="{% url 'chart_view3' %}">
+                        <i class="fas fa-balance-scale mr-2"></i>正常与违约用户对比
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="chart-link" data-url="{% url 'chart_view4' %}">
+                        <i class="fas fa-clock mr-2"></i>用户借贷时段分布
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <div id="content">
+            <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+                <button type="button" id="sidebarCollapse" class="btn btn-info">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </nav>
+
+            <div class="container">
+                <div id="prediction-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>请上传csv数据以进行预测</h2>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                <div class="form-group">
+                                    {{ form.as_p }}
+                                </div>
+                                <button class="btn btn-primary" type="submit">
+                                    <i class="fas fa-upload mr-2"></i>开始预测评级
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    {% if html_table %}
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>风险概率评级</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                {{ html_table|safe }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if html_table1 %}
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>可借贷金额预测</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                {{ html_table1|safe }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div id="chart-content" style="display: none;">
+                    <!-- 这里将显示图表 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+    
+    <script>
+        $(document).ready(function () {
+            $('#sidebarCollapse').on('click', function () {
+                $('#sidebar').toggleClass('active');
+            });
+
+            // 更新预测链接点击处理
+            $('#prediction-link').on('click', function(e) {
+                e.preventDefault();
+                // 移除所有链接的active类
+                $('#sidebar ul li a').removeClass('active');
+                // 添加active类到当前点击的链接
+                $(this).addClass('active');
+                $('#prediction-content').show();
+                $('#chart-content').hide();
+            });
+
+            // 更新图表链接点击处理
+            $('.chart-link').on('click', function(e) {
+                e.preventDefault();
+                const url = $(this).data('url');
+                // 移除所有链接的active类
+                $('#sidebar ul li a').removeClass('active');
+                // 添加active类到当前点击的链接
+                $(this).addClass('active');
+                $('#prediction-content').hide();
+                $('#chart-content').show();
+                
+                // 加载图表
+                $.ajax({
+                    url: url,
+                    method: 'GET',
+                    success: function(response) {
+                        $('#chart-content').html(response);
+                    },
+                    error: function(xhr, status, error) {
+                        $('#chart-content').html('<div class="alert alert-danger">加载图表时出错</div>');
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
