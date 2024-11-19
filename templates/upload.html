@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <title>Upload CSV File</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        body {
+            background-color: #f4f7fa; /* 设置背景色 */
+            font-family: Arial, sans-serif; /* 使用清爽的字体 */
+        }
+
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px; /* 添加一些间距 */
+            background-color: #007BFF; /* 按钮背景色 */
+            color: white; /* 按钮字体颜色 */
+            text-align: center; /* 文本居中 */
+            text-decoration: none; /* 移除下划线 */
+            border-radius: 5px; /* 圆角 */
+            transition: background-color 0.3s; /* 添加过渡效果 */
+            border: none; /* 移除默认边框 */
+            box-shadow: 0 2px 5px rgba(0, 123, 255, 0.3); /* 添加阴影效果 */
+        }
+
+        .button:hover {
+            background-color: #0056b3; /* 悬停时的背景色 */
+        }
+
+        h1, h2 {
+            color: #333; /* 更好的字体颜色 */
+        }
+
+        table {
+            width: 100%; /* 表格宽度 */
+            margin-top: 20px; /* 上间距 */
+            border-collapse: collapse; /* 合并边框 */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* 添加阴影效果 */
+        }
+
+        th, td {
+            padding: 15px; /* 内部填充 */
+            text-align: left; /* 文字左对齐 */
+            border-bottom: 1px solid #ddd; /* 下边框 */
+        }
+
+        th {
+            background-color: #007BFF; /* 表头背景色 */
+            color: white; /* 表头字体颜色 */
+        }
+
+        tr:hover {
+            background-color: #f1f1f1; /* 悬停行背景色 */
+        }
+
+        .wrapper {
+            display: flex;
+            width: 100%;
+        }
+
+        #sidebar {
+            min-width: 250px;
+            max-width: 250px;
+            min-height: 100vh;
+            background: #343a40;
+            color: #fff;
+            transition: all 0.3s;
+        }
+
+        #sidebar.active {
+            margin-left: -250px;
+        }
+
+        #sidebar .sidebar-header {
+            padding: 20px;
+            background: #2c3136;
+        }
+
+        #sidebar ul.components {
+            padding: 20px 0;
+        }
+
+        #sidebar ul li a {
+            padding: 10px 20px;
+            font-size: 1.1em;
+            display: block;
+            color: #fff;
+            text-decoration: none;
+        }
+
+        #sidebar ul li a:hover {
+            background: #007bff;
+        }
+
+        /* 添加激活状态的样式 */
+        #sidebar ul li a.active {
+            background: #007bff;
+        }
+
+        #content {
+            width: 100%;
+            padding: 20px;
+            min-height: 100vh;
+            transition: all 0.3s;
+        }
+
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        /* 添加加载动画样式 */
+        .loading-spinner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+        }
+
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        /* 添加页面切换动画 */
+        .fade-enter {
+            opacity: 0;
+        }
+
+        .fade-enter-active {
+            opacity: 1;
+            transition: opacity 200ms ease-in;
+        }
+
+        /* 优化图表容器样式 */
+        .chart-container {
+            opacity: 0;
+            animation: fadeIn 0.3s ease-in forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <nav id="sidebar">
+            <div class="sidebar-header">
+                <h3>用户信用可视化</h3>
+            </div>
+
+            <ul class="list-unstyled components">
+                <li class="active">
+                    <a href="#" id="prediction-link">
+                        <i class="fas fa-robot mr-2"></i>信用评级预测
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="chart-link" data-url="{% url 'chart_view' %}">
+                        <i class="fas fa-user-circle mr-2"></i>用户画像分析
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="filter-link" data-url="{% url 'filter_view' %}">
+                        <i class="fas fa-filter mr-2"></i>数据筛选器
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <div id="content">
+            <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+                <button type="button" id="sidebarCollapse" class="btn btn-info">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </nav>
+
+            <div class="container">
+                <div id="prediction-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>请上传csv数据以进行预测</h2>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                <div class="form-group">
+                                    {{ form.as_p }}
+                                </div>
+                                <button class="btn btn-primary" type="submit">
+                                    <i class="fas fa-upload mr-2"></i>开始预测评级
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    {% if html_table %}
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>风险概率评级</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                {{ html_table|safe }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if html_table1 %}
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>可借贷金额预测</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                {{ html_table1|safe }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div id="chart-content" style="display: none;">
+                    <!-- 这里将显示图表 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            let isLoading = false;
+
+            // 添加加载指示器
+            const loadingHtml = `
+                <div class="loading-spinner">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="sr-only">加载中...</span>
+                    </div>
+                    <p>正在加载数据...</p>
+                </div>
+            `;
+
+            // 处理侧边栏链接点击
+            $('#sidebar ul li a').click(function(e) {
+                e.preventDefault();
+                
+                if (isLoading) return; // 防止重复点击
+                
+                const $link = $(this);
+                const url = $link.data('url');
+                
+                // 如果已经是当前页面，不重新加载
+                if ($link.hasClass('active')) return;
+                
+                // 更新active状态
+                $('#sidebar ul li a').removeClass('active');
+                $link.addClass('active');
+
+                // 特殊处理信用评级预测链接
+                if ($link.attr('id') === 'prediction-link') {
+                    // 隐藏其他内容，显示预测内容
+                    $('#content').html(`
+                        <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+                            <button type="button" id="sidebarCollapse" class="btn btn-info">
+                                <i class="fas fa-bars"></i>
+                            </button>
+                        </nav>
+                        <div class="container">
+                            <div id="prediction-content">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h2>请上传csv数据以进行预测</h2>
+                                    </div>
+                                    <div class="card-body">
+                                        <form method="post" enctype="multipart/form-data">
+                                            {% csrf_token %}
+                                            <div class="form-group">
+                                                {{ form.as_p }}
+                                            </div>
+                                            <button class="btn btn-primary" type="submit">
+                                                <i class="fas fa-upload mr-2"></i>开始预测评级
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `);
+                    return;
+                }
+                
+                // 其他链接的处理
+                isLoading = true;
+                
+                // 显示加载指示器
+                $('#content').html(loadingHtml);
+                
+                // 加载新内容
+                fetch(url)
+                    .then(response => response.text())
+                    .then(html => {
+                        isLoading = false;
+                        $('#content').html(html);
+                    })
+                    .catch(error => {
+                        isLoading = false;
+                        $('#content').html('<div class="alert alert-danger">加载失败，请重试</div>');
+                        console.error('Error:', error);
+                    });
+            });
+
+            // 处理侧边栏折叠按钮
+            $('#sidebarCollapse').click(function() {
+                $('#sidebar').toggleClass('active');
+            });
+        });
+    </script>
+</body>
+</html>
